@@ -1,4 +1,4 @@
-﻿#Connect-AzureRmAccount
+﻿Connect-AzureRmAccount
 $resourceGroup = "*"
 $vmName = "*"
 $vm = Get-AzureRmVM -ResourceGroupName $resourceGroup -VMName $vmName 
