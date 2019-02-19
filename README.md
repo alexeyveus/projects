@@ -1,1 +1,1 @@
-My private repo
+My public repo
