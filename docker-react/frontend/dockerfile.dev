@@ -2,7 +2,7 @@ FROM node:alpine
 
 WORKDIR /app
 
-COPY package.json .
+COPY docker-react/frontend/package.json .
 
 RUN npm install
 
