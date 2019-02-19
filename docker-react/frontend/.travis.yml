@@ -5,6 +5,6 @@ services:
 before_install:
   - docker build -t alekseysuev/projects/docker-react/frontend -f dockerfile.dev .
 
+
 script:
   - docker run alekseysuev/projects/docker-react/frontend npm install test -- --coverage
-  
