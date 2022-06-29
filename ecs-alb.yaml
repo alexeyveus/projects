@@ -1,0 +1,518 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: metrics-viz-ecscluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+###############################################################################
+  CloudwatchLogsGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Join
+        - '-'
+        - - ECSLogGroup
+          - !Ref 'AWS::StackName'
+      RetentionInDays: 14
+###############################################################################
+  TaskdefinitionFrontendDev:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: "metrics-viz-frontend-dev-td"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: 512
+      Memory: 1GB
+      ExecutionRoleArn: !Ref ecsTaskDefExecutionRole
+      TaskRoleArn: !Ref ecsTaskDefExecutionRole
+      NetworkMode: awsvpc
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: metrics-viz-frontend
+          Cpu: '512'
+          Essential: 'true'
+          Image: '115473357299.dkr.ecr.eu-west-1.amazonaws.com/metrics-viz-frontend:latest'
+          Memory: '1024'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudwatchLogsGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: metrics-viz-frontend-dev
+          PortMappings:
+            - ContainerPort: 3000
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  TaskdefinitionBackendDev:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: "metrics-viz-backend-dev-td"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: 512
+      Memory: 1GB
+      ExecutionRoleArn: !Ref ecsTaskDefExecutionRole
+      TaskRoleArn: !Ref ecsTaskDefExecutionRole
+      NetworkMode: awsvpc
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: metrics-viz-backend
+          Cpu: '512'
+          Essential: 'true'
+          Image: '115473357299.dkr.ecr.eu-west-1.amazonaws.com/metrics-viz-backend:latest'
+          Memory: '1024'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudwatchLogsGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: metrics-viz-backend-dev
+          PortMappings:
+            - ContainerPort: 8081
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  TaskdefinitionEp5gContract:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: "ep5g-contract-dev-td"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: 256
+      Memory: 1GB
+      ExecutionRoleArn: !Ref ecsTaskDefExecutionRole
+      TaskRoleArn: !Ref ecsTaskDefExecutionRole
+      NetworkMode: awsvpc
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: ep5g-contract-backend
+          Cpu: '256'
+          Essential: 'true'
+          Image: '115473357299.dkr.ecr.eu-west-1.amazonaws.com/ep5g-contract:latest'
+          Memory: '1024'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudwatchLogsGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: ep5g-contract-backend-dev
+          PortMappings:
+            - ContainerPort: 8080
+      Tags:
+        - Key: Env
+          Value: Dev
+###############################################################################
+  ECSALBDev:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: metrics-viz-alb-dev
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets:
+        - !ImportValue 'bt-vpc-stack-1-Public-Subnet1-ID'
+        - !ImportValue 'bt-vpc-stack-1-Public-Subnet2-ID'
+      SecurityGroups:
+        - !ImportValue 'bt-vpc-stack-1-PubHttpSG-ID'
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  ALBListenerDev:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTGDev
+      LoadBalancerArn: !Ref ECSALBDev
+      Port: '80'
+      Protocol: HTTP
+
+  ECSALBDevListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTGDev
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /
+      ListenerArn: !Ref ALBListenerDev
+      Priority: 1
+
+  ECSTGDev:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    DependsOn: ECSALBDev
+    Properties:
+      TargetType: ip
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Name: ECSTGDev
+      Port: 3000
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !ImportValue 'bt-vpc-stack-1-VPCID'
+      Tags:
+        - Key: Env
+          Value: Dev
+###############################################################################
+  ECSServiceFrontendDev:
+    Type: 'AWS::ECS::Service'
+    DependsOn: ALBListenerDev
+    Properties:
+      ServiceName: metrics-viz-frontend-dev-service
+      Cluster: !Ref ECSCluster
+      CapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 10
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !ImportValue 'bt-vpc-stack-1-FrontendSG-ID'
+          Subnets:
+            - !ImportValue 'bt-vpc-stack-1-Public-Subnet1-ID'
+            - !ImportValue 'bt-vpc-stack-1-Public-Subnet2-ID'
+      DesiredCount: '1'
+      LoadBalancers:
+        - ContainerName: metrics-viz-frontend
+          ContainerPort: '3000'
+          TargetGroupArn: !Ref ECSTGDev
+      TaskDefinition: !Ref TaskdefinitionFrontendDev
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      ServiceRegistries:
+        - ContainerName: metrics-viz-frontend
+          RegistryArn: !GetAtt DiscoveryServiceFrontendDev.Arn
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  ECSServiceBackendDev:
+    Type: 'AWS::ECS::Service'
+    Properties:
+      ServiceName: metrics-viz-backend-dev-service
+      Cluster: !Ref ECSCluster
+      CapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 10
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !ImportValue 'bt-vpc-stack-1-BackendSG-ID'
+          Subnets:
+            # - !ImportValue 'bt-vpc-stack-1-Public-Subnet1-ID'
+            # - !ImportValue 'bt-vpc-stack-1-Public-Subnet2-ID'
+            - !ImportValue 'bt-vpc-stack-1-Private-Subnet1-ID'
+            #- !ImportValue 'bt-vpc-stack-1-Private-Subnet2-ID'
+      DesiredCount: '1'
+      TaskDefinition: !Ref TaskdefinitionBackendDev
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      ServiceRegistries:
+        - ContainerName: metrics-viz-backend
+          RegistryArn: !GetAtt DiscoveryServiceBackendDev.Arn
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  ECSServiceEp5gContractDev:
+    Type: 'AWS::ECS::Service'
+    DependsOn: DiscoveryServiceEp5gContractDev
+    Properties:
+      ServiceName: ep5g-contract-dev-service
+      Cluster: !Ref ECSCluster
+      CapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 10
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !ImportValue 'bt-vpc-stack-1-BackendSG-ID'
+          Subnets:
+            # - !ImportValue 'bt-vpc-stack-1-Public-Subnet1-ID'
+            # - !ImportValue 'bt-vpc-stack-1-Public-Subnet2-ID'
+            - !ImportValue 'bt-vpc-stack-1-Private-Subnet1-ID'
+            #- !ImportValue 'bt-vpc-stack-1-Private-Subnet2-ID'
+      DesiredCount: '1'
+      TaskDefinition: !Ref TaskdefinitionEp5gContract
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      ServiceRegistries:
+        - ContainerName: ep5g-contract-backend
+          RegistryArn: !GetAtt DiscoveryServiceEp5gContractDev.Arn
+      Tags:
+        - Key: Env
+          Value: Dev
+###############################################################################
+  ecsTaskDefExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: metrics-viz-ECSTaskExecutionRole
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::115473357299:policy/ECSTaskSsmPolicy
+        - arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess
+
+  EC2Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:CreateCluster'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Poll'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:StartTelemetrySession'
+                  - 'ecs:Submit*'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+###############################################################################
+  MetricsPrivateNamespaceDev:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: metrics-viz-dev.local
+      Vpc: !ImportValue 'bt-vpc-stack-1-VPCID'
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  DiscoveryServiceFrontendDev:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Description: Frontend Dev Discovery Service for the Metrics Vizualization App
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - TTL: 60
+            Type: A
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+      Name: metrics-viz-frontend-dev-svc
+      NamespaceId: !Ref MetricsPrivateNamespaceDev
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  DiscoveryServiceBackendDev:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Description: Backend Dev Discovery Service for the Metrics Vizualization App
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - TTL: 60
+            Type: A
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+      Name: metrics-viz-backend-dev-svc
+      NamespaceId: !Ref MetricsPrivateNamespaceDev
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  DiscoveryServiceEp5gContractDev:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Description: Backend Dev Discovery Service for the EP5G Contract Stub App
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - TTL: 60
+            Type: A
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+      Name: ep5g-contract-backend-dev-svc
+      NamespaceId: !Ref MetricsPrivateNamespaceDev
+      Tags:
+        - Key: Env
+          Value: Dev
+###############################################################################
+  ScalableTargetFrontendDev:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      RoleARN: !GetAtt AutoScalingRole.Arn
+      ResourceId: service/metrics-viz-ecscluster/metrics-viz-frontend-dev-service
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: 1
+      MaxCapacity: 3
+    DependsOn: ECSServiceFrontendDev
+
+  ScalableTargetBackendDev:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      RoleARN: !GetAtt AutoScalingRole.Arn
+      ResourceId: service/metrics-viz-ecscluster/metrics-viz-backend-dev-service
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: 1
+      MaxCapacity: 3
+    DependsOn: ECSServiceBackendDev
+
+  ScalableTargetEp5gContractDev:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      RoleARN: !GetAtt AutoScalingRole.Arn
+      ResourceId: service/metrics-viz-ecscluster/ep5g-contract-dev-service
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: 1
+      MaxCapacity: 2
+    DependsOn: ECSServiceEp5gContractDev
+
+  ScalingPolicyFrontendDev:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: ecs-service-auto-scaling-policy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTargetFrontendDev
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 75.0
+
+  ScalingPolicyBackendDev:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: ecs-service-auto-scaling-policy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTargetBackendDev
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 75.0
+
+  ScalingPolicyEp5gContractDev:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: ecs-service-auto-scaling-policy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTargetEp5gContractDev
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 75.0
+
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: service-auto-scaling-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [application-autoscaling.amazonaws.com]
+            Action: ["sts:AssumeRole"]
+      Policies:
+        - PolicyName: service-auto-scaling-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:UpdateService
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:DeleteAlarms
+                Resource:
+                  - "*"
+###############################################################################
+Outputs:
+  MetricsPrivateNamespace:
+    Value: !Ref MetricsPrivateNamespaceDev
+    Export:
+      Name: 'MetricsPrivateNamespace'
+
+  TaskDefExecutionRole:
+    Value: !Ref ecsTaskDefExecutionRole
+    Export:
+      Name: 'TaskDefExecutionRole'
+
+  CloudwatchLogsGroup:
+    Value: !Ref CloudwatchLogsGroup
+    Export:
+      Name: 'CloudwatchLogsGroup'
+
+  ecsservicefrontenddev:
+    Value: !Ref ECSServiceFrontendDev
+
+  ecsservicebackenddev:
+    Value: !Ref ECSServiceBackendDev
+
+  ecsserviceep5gcontractdev:
+    Value: !Ref ECSServiceEp5gContractDev
+
+  ecscluster:
+    Value: !Ref ECSCluster
+    Export:
+      Name: 'ECSCluster'
+
+  ECSALBDev:
+    Description: Your ALB Dev DNS URL
+    Value: !Join
+      - ''
+      - - !GetAtt
+          - ECSALBDev
+          - DNSName
+
+  taskdefFrontDev:
+    Value: !Ref TaskdefinitionFrontendDev
+
+  taskdefBackendDev:
+    Value: !Ref TaskdefinitionBackendDev
+
+  taskdefEp5gContractDev:
+    Value: !Ref TaskdefinitionEp5gContract

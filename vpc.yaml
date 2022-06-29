@@ -1,0 +1,340 @@
+Description:  This template deploys a VPC, with a pair of public and private subnets spread
+  across two Availability Zones. It deploys an internet gateway, with a default
+  route on the public subnets.
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+    Default: metrics-viz-bt
+
+  VpcCIDR:
+    Description: IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.1.1.0/24
+
+  PublicSubnet1CIDR:
+    Description: IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.1.1.0/26
+
+  PublicSubnet2CIDR:
+    Description: IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.1.1.64/26
+
+  PrivateSubnet1CIDR:
+    Description: IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.1.1.128/26
+
+  PrivateSubnet2CIDR:
+    Description: IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.1.1.192/26
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+###############################################
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
+###############################################
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Subnet (AZ1)
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Subnet (AZ2)
+###############################################
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Routes
+
+  IGWPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+###############################################
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: eipalloc-041c6a5c222b72c99
+      ConnectivityType: public
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: Metrics-viz-NatGateway
+###############################################
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+###############################################
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Routes (AZ1)
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+###############################################
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Routes (AZ2)
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+###############################################
+  PublicHttpIngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Http/Https ingress-sg"
+      GroupDescription: "Security group with Http/Https/SSH ingress rule"
+      SecurityGroupIngress:
+      - Description: Http traffic allow
+        IpProtocol: tcp
+        CidrIp: 0.0.0.0/0
+        FromPort: 80
+        ToPort: 80
+      - Description: Https traffic allow
+        IpProtocol: tcp
+        CidrIp: 0.0.0.0/0
+        FromPort: 443
+        ToPort: 443
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: ALB metrics-viz SG
+
+  FrontendIngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Frontend ingress-sg"
+      GroupDescription: "Security group with ingress rules"
+      SecurityGroupIngress:
+      - Description: Frontend traffic allow
+        IpProtocol: tcp
+        CidrIp: 0.0.0.0/0
+        FromPort: 3000
+        ToPort: 3000
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Frontend metrics-viz SG
+
+  BackendIngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Backend ingress-sg"
+      GroupDescription: "Security group with ingress rules"
+      SecurityGroupIngress:
+      - Description: Backend traffic allow
+        IpProtocol: tcp
+        CidrIp: !Ref VpcCIDR
+        FromPort: 8080
+        ToPort: 8081
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Backend metrics-viz SG
+
+  PrometheusIngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Prometheus ingress-sg"
+      GroupDescription: "Security group with ingress rules"
+      SecurityGroupIngress:
+        - Description: Prometheus traffic allow
+          IpProtocol: tcp
+          CidrIp: !Ref VpcCIDR
+          FromPort: 9090
+          ToPort: 9091
+        - Description: EFS/NFS traffic allow
+          IpProtocol: tcp
+          CidrIp: !Ref VpcCIDR
+          FromPort: 2049
+          ToPort: 2049
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Prometheus metrics-viz SG
+
+Outputs:
+  StackName:
+    Description: A reference to the created CF Stack Name
+    Value:
+      'Fn::Sub': ${AWS::StackName}
+    Export:
+      Name: "VPCStackName"
+
+  VPC:
+    Description: A reference to the created VPC ID
+    Value: !Ref VPC
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-VPCID'
+
+  PublicSubnets:
+    Description: A list of the public subnets
+    Value: !Join [ ",", [ !Ref PublicSubnet1, !Ref PublicSubnet2 ]]
+
+  PrivateSubnets:
+    Description: A list of the private subnets
+    Value: !Join [ ",", [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]]
+
+  PublicSubnet1:
+    Description: A reference to the public subnet in the 1st Availability Zone
+    Value: !Ref PublicSubnet1
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-Public-Subnet1-ID'
+
+  PublicSubnet2:
+    Description: A reference to the public subnet in the 2nd Availability Zone
+    Value: !Ref PublicSubnet2
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-Public-Subnet2-ID'
+
+  PrivateSubnet1:
+    Description: A reference to the private subnet in the 1st Availability Zone
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-Private-Subnet1-ID'
+
+  PrivateSubnet2:
+    Description: A reference to the private subnet in the 2nd Availability Zone
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-Private-Subnet2-ID'
+
+  InternetGateway:
+    Description: VPC`s InternetGatewayId
+    Value: !Ref InternetGateway
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-IGW-ID'
+
+  PublicHttpIngressSecurityGroup:
+    Description: Security group with ingress rule
+    Value: !Ref PublicHttpIngressSecurityGroup
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-PubHttpSG-ID'
+
+  FrontendIngressSecurityGroup:
+    Description: Security group with ingress rule
+    Value: !Ref FrontendIngressSecurityGroup
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-FrontendSG-ID'
+
+  BackendIngressSecurityGroup:
+    Description: Security group with ingress rule
+    Value: !Ref BackendIngressSecurityGroup
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-BackendSG-ID'
+
+  PrometheusIngressSecurityGroup:
+    Description: Security group with ingress rule
+    Value: !Ref PrometheusIngressSecurityGroup
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-PrometheusSG-ID'
+
+  NatGatewayID:
+    Value: !Ref NatGateway
+    Export:
+      Name: "NatGateway"

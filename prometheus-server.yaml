@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  TaskdefinitionPrometheus:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: "metrics-viz-prometheus-td"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: 512
+      Memory: 1GB
+      ExecutionRoleArn: !ImportValue TaskDefExecutionRole
+      TaskRoleArn: !ImportValue TaskDefExecutionRole
+      NetworkMode: awsvpc
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: metrics-viz-prometheus
+          Cpu: '512'
+          Essential: 'true'
+          Image: 'prom/prometheus:v2.1.0'
+          Memory: '1024'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !ImportValue CloudwatchLogsGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: metrics-viz-prometheus
+          PortMappings:
+            - ContainerPort: 9090
+          MountPoints:
+            - ContainerPath: /prometheus
+              ReadOnly: false
+              SourceVolume: "EFSVolumePrometheus"
+      Volumes:
+        - Name: "EFSVolumePrometheus"
+          EFSVolumeConfiguration:
+            FilesystemId: !ImportValue EFSFileSystemDev
+            RootDirectory: '/'
+            AuthorizationConfig:
+              AccessPointId: !ImportValue EFSPrometheusAccesspoint
+              IAM: ENABLED
+            TransitEncryption: ENABLED
+
+  ECSServicePrometheus:
+    Type: 'AWS::ECS::Service'
+    Properties:
+      ServiceName: metrics-viz-prometheus-service
+      Cluster: !ImportValue ECSCluster
+      CapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 10
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !ImportValue 'bt-vpc-stack-1-PrometheusSG-ID'
+          Subnets:
+            # - !ImportValue 'bt-vpc-stack-1-Public-Subnet1-ID'
+            # - !ImportValue 'bt-vpc-stack-1-Public-Subnet2-ID'
+            - !ImportValue 'bt-vpc-stack-1-Private-Subnet1-ID'
+            # - !ImportValue 'bt-vpc-stack-1-Private-Subnet2-ID'
+      DesiredCount: '1'
+      TaskDefinition: !Ref TaskdefinitionPrometheus
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      ServiceRegistries:
+        - ContainerName: metrics-viz-prometheus
+          RegistryArn: !GetAtt DiscoveryServicePrometheus.Arn
+
+  DiscoveryServicePrometheus:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Description: Prometheus Discovery Service for the Metrics Vizualization App
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - TTL: 60
+            Type: A
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+      Name: metrics-viz-prometheus-svc
+      NamespaceId: !ImportValue MetricsPrivateNamespace

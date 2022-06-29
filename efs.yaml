@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  EFSPrometheusAccesspoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      AccessPointTags:
+        - Key: Env
+          Value: Dev
+      FileSystemId: !Ref EFSFileSystemDev
+      PosixUser:
+        Gid: 65534
+        Uid: 65534
+      RootDirectory:
+        CreationInfo:
+          OwnerGid: 65534
+          OwnerUid: 65534
+          Permissions: 777
+        Path: "/prometheus"
+
+  EFSPrometheusMountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystemDev
+      SecurityGroups:
+        - !ImportValue 'bt-vpc-stack-1-PrometheusSG-ID'
+      SubnetId: !ImportValue 'bt-vpc-stack-1-Private-Subnet1-ID' 
+        #!ImportValue 'bt-vpc-stack-1-Public-Subnet1-ID'
+
+  EFSFileSystemDev:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      AvailabilityZoneName: 'eu-west-1a'
+      BackupPolicy:
+        Status: DISABLED
+      Encrypted: false
+      FileSystemTags:
+        - Key: Name
+          Value: EFS Prometheus
+        - Key: Env
+          Value: Dev
+        - Key: EFSWhatFor
+          Value: Prometheus
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_7_DAYS
+
+Outputs:
+  EFSFileSystem:
+    Description: A reference to the created CF EFS File System ID
+    Value:
+      !Ref EFSFileSystemDev
+    Export:
+      Name: "EFSFileSystemDev"
+
+  EFSPrometheusAccesspoint:
+    Description: A reference to the created CF EFS Access Point ID
+    Value:
+      !Ref EFSPrometheusAccesspoint
+    Export:
+      Name: "EFSPrometheusAccesspoint"
