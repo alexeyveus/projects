@@ -80,38 +80,6 @@ Resources:
       Tags:
         - Key: Env
           Value: Dev
-
-  TaskdefinitionEp5gContract:
-    Type: 'AWS::ECS::TaskDefinition'
-    Properties:
-      Family: "ep5g-contract-dev-td"
-      RequiresCompatibilities:
-        - "FARGATE"
-      Cpu: 256
-      Memory: 1GB
-      ExecutionRoleArn: !Ref ecsTaskDefExecutionRole
-      TaskRoleArn: !Ref ecsTaskDefExecutionRole
-      NetworkMode: awsvpc
-      RuntimePlatform:
-        CpuArchitecture: X86_64
-        OperatingSystemFamily: LINUX
-      ContainerDefinitions:
-        - Name: ep5g-contract-backend
-          Cpu: '256'
-          Essential: 'true'
-          Image: '115473357299.dkr.ecr.eu-west-1.amazonaws.com/ep5g-contract:latest'
-          Memory: '1024'
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref CloudwatchLogsGroup
-              awslogs-region: !Ref 'AWS::Region'
-              awslogs-stream-prefix: ep5g-contract-backend-dev
-          PortMappings:
-            - ContainerPort: 8080
-      Tags:
-        - Key: Env
-          Value: Dev
 ###############################################################################
   ECSALBDev:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
@@ -235,36 +203,6 @@ Resources:
         - Key: Env
           Value: Dev
 
-  ECSServiceEp5gContractDev:
-    Type: 'AWS::ECS::Service'
-    DependsOn: DiscoveryServiceEp5gContractDev
-    Properties:
-      ServiceName: ep5g-contract-dev-service
-      Cluster: !Ref ECSCluster
-      CapacityProviderStrategy:
-        - CapacityProvider: FARGATE_SPOT
-          Weight: 10
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          AssignPublicIp: DISABLED
-          SecurityGroups:
-            - !ImportValue 'bt-vpc-stack-1-BackendSG-ID'
-          Subnets:
-            # - !ImportValue 'bt-vpc-stack-1-Public-Subnet1-ID'
-            # - !ImportValue 'bt-vpc-stack-1-Public-Subnet2-ID'
-            - !ImportValue 'bt-vpc-stack-1-Private-Subnet1-ID'
-            #- !ImportValue 'bt-vpc-stack-1-Private-Subnet2-ID'
-      DesiredCount: '1'
-      TaskDefinition: !Ref TaskdefinitionEp5gContract
-      DeploymentConfiguration:
-        MaximumPercent: 100
-        MinimumHealthyPercent: 0
-      ServiceRegistries:
-        - ContainerName: ep5g-contract-backend
-          RegistryArn: !GetAtt DiscoveryServiceEp5gContractDev.Arn
-      Tags:
-        - Key: Env
-          Value: Dev
 ###############################################################################
   ecsTaskDefExecutionRole:
     Type: 'AWS::IAM::Role'
@@ -361,23 +299,6 @@ Resources:
       Tags:
         - Key: Env
           Value: Dev
-
-  DiscoveryServiceEp5gContractDev:
-    Type: AWS::ServiceDiscovery::Service
-    Properties:
-      Description: Backend Dev Discovery Service for the EP5G Contract Stub App
-      DnsConfig:
-        RoutingPolicy: MULTIVALUE
-        DnsRecords:
-          - TTL: 60
-            Type: A
-      HealthCheckCustomConfig:
-        FailureThreshold: 1
-      Name: ep5g-contract-backend-dev-svc
-      NamespaceId: !Ref MetricsPrivateNamespaceDev
-      Tags:
-        - Key: Env
-          Value: Dev
 ###############################################################################
   ScalableTargetFrontendDev:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
@@ -401,17 +322,6 @@ Resources:
       MaxCapacity: 3
     DependsOn: ECSServiceBackendDev
 
-  ScalableTargetEp5gContractDev:
-    Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Properties:
-      RoleARN: !GetAtt AutoScalingRole.Arn
-      ResourceId: service/metrics-viz-ecscluster/ep5g-contract-dev-service
-      ServiceNamespace: ecs
-      ScalableDimension: ecs:service:DesiredCount
-      MinCapacity: 1
-      MaxCapacity: 2
-    DependsOn: ECSServiceEp5gContractDev
-
   ScalingPolicyFrontendDev:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
@@ -429,17 +339,6 @@ Resources:
       PolicyName: ecs-service-auto-scaling-policy
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref ScalableTargetBackendDev
-      TargetTrackingScalingPolicyConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ECSServiceAverageCPUUtilization
-        TargetValue: 75.0
-
-  ScalingPolicyEp5gContractDev:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: ecs-service-auto-scaling-policy
-      PolicyType: TargetTrackingScaling
-      ScalingTargetId: !Ref ScalableTargetEp5gContractDev
       TargetTrackingScalingPolicyConfiguration:
         PredefinedMetricSpecification:
           PredefinedMetricType: ECSServiceAverageCPUUtilization
@@ -492,9 +391,6 @@ Outputs:
   ecsservicebackenddev:
     Value: !Ref ECSServiceBackendDev
 
-  ecsserviceep5gcontractdev:
-    Value: !Ref ECSServiceEp5gContractDev
-
   ecscluster:
     Value: !Ref ECSCluster
     Export:
@@ -513,6 +409,3 @@ Outputs:
 
   taskdefBackendDev:
     Value: !Ref TaskdefinitionBackendDev
-
-  taskdefEp5gContractDev:
-    Value: !Ref TaskdefinitionEp5gContract
