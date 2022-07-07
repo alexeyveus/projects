@@ -1,0 +1,8 @@
+---
+# Configure and deploy SMO serve using Ansible SMO Role
+- name: smo role
+  hosts: all
+  become: true
+  gather_facts: False
+  roles:
+    - { role: smo, tags: "smo" }

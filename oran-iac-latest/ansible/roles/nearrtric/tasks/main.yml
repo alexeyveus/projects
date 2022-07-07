@@ -1,0 +1,114 @@
+---
+- name: Cleanup old repo folder
+  file:
+    path: "{{nearrtric_repo_path}}"
+    state: absent
+
+- name: Step 1. Obtaining the Deployment Scripts and Charts. Checkout o-ran repo, bronze branch
+  git:
+    repo: 'http://gerrit.o-ran-sc.org/r/it/dep'
+    dest: "{{nearrtric_repo_path}}"
+    version: bronze
+    force: yes
+
+- shell: "git submodule update --init --recursive --remote"
+  args:
+    chdir: "{{nearrtric_repo_path}}"
+
+- name: Step 2. Generation of cloud-init Script
+  shell: "./gen-cloud-init.sh"
+  args:
+    chdir: "{{nearrtric_repo_path}}/tools/k8s/bin"
+
+# - name: Modify infra.rc for cloud-init script
+#   blockinfile:
+#     path: "{{smo_repo_path}}/tools/k8s/etc/infra.rc"
+#     block: |
+#       INFRA_DOCKER_VERSION="{{INFRA_DOCKER_VERSION}}"
+#       INFRA_K8S_VERSION="{{INFRA_K8S_VERSION}}"
+#       INFRA_CNI_VERSION="{{INFRA_CNI_VERSION}}"
+#       INFRA_HELM_VERSION="{{INFRA_HELM_VERSION}}"
+#     mode: 0644
+#     marker: "# {mark} ANSIBLE MANAGED BLOCK"
+
+- name: Fix old helm, kong repo urls and version
+  shell: |
+    sed -i 's|2.12.3|{{nearrtric_helm_version}}|' $(find $PWD -name 'k8s-1node*')
+    sed -i 's|https://storage.googleapis.com/kubernetes-helm|https://get.helm.sh|' $(find $PWD -name 'k8s-1node*')
+    sed -i 's|helm init|helm init --tiller-image=ghcr.io/helm/tiller:v{{nearrtric_helm_version}} --stable-repo-url=https://charts.helm.sh/stable|' $(find $PWD -name 'k8s-1node*')
+    sed -i 's|kong-docker-kubernetes-ingress-controller.bintray.io/kong-ingress-controller|kong/kubernetes-ingress-controller|' {{nearrtric_repo_path}}/ric-dep/helm/infrastructure/subcharts/kong/values.yaml
+  args:
+    chdir: "{{nearrtric_repo_path}}/tools/k8s/bin"
+    warn: no
+
+- name: Step 3. Installation of Kubernetes, Helm, Docker, etc.
+  shell: "nohup bash -c '$(find $PWD -name 'k8s-1node*') &> step3.output' &"
+  args:
+    chdir: "{{nearrtric_repo_path}}/tools/k8s/bin"
+
+- debug:
+    msg:
+    - "Step 3 deployment successfully launched. Usually it takes ~5-6mins. NearRTRic Node will be rebooted after completion."
+    - "To observe installation progress please use command in the new terminal window under the root privileges:"
+    - "--------------------------------------------------------"
+    - "tail -f {{nearrtric_repo_path}}/tools/k8s/bin/step3.output"
+
+- name: Wait for system to become reachable over SSH
+  wait_for_connection:
+    sleep: 60
+    delay: 300
+    timeout: 900
+
+- shell: "kubectl get pods -A"
+  register: k8s_pods_readiness
+
+- debug:
+    msg: "{{ k8s_pods_readiness.stdout_lines }}"
+
+- name: Step 4. Deploy RIC using Recipe
+  shell: |
+    nohup bash -c './deploy-ric-platform -f ../RECIPE_EXAMPLE/PLATFORM/example_recipe.yaml &> step4.output' &
+  args:
+    chdir: "{{nearrtric_repo_path}}/bin"
+
+- debug:
+    msg:
+    - "Step 4 deployment successfully launched."
+    - "To observe installation progress please use command in the new terminal window under the root privileges:"
+    - "----------------------------------------------"
+    - "tail -f {{nearrtric_repo_path}}/bin/step4.output"
+    - "----------------------------------------------"
+    - "Upon successful deployment, the 'kubectl get pods -n ricplt' command should show 16 pods in ricplt namespace."
+    - "Usually it takes ~4mins. Ansible playbook execution will be paused until all pods in ricplt namespace will become in running state. Please wait."
+
+- pause:
+    minutes: 5
+
+- shell: "kubectl get pods -n ricplt"
+  register: ric_pods_readiness
+
+- debug:
+    msg: "{{ ric_pods_readiness.stdout_lines }}"
+
+# - name: Step 5. Onboarding a HelloWorld xApp
+#   shell: |
+#     echo '{ "config-file.json_url": "https://gerrit.o-ran-sc.org/r/gitweb?p=ric-app/hw.git;a=blob_plain;f=init/config-file.json;hb=HEAD" }' > onboard.hw.url
+#     nohup bash -c 'kubectl port-forward $(kubectl get pods -A -l app.kubernetes.io/name=kong -o jsonpath="{.items[0].metadata.name}") 32088:32080 -n ricplt' &
+#     curl --location --request POST "http://localhost:32088/onboard/api/v1/onboard/download"  --header 'Content-Type: application/json' --data-binary "@./onboard.hw.url"
+#     curl --location --request GET "http://localhost:32088/onboard/api/v1/charts"
+#   register: onboarded_xApps_readiness
+#   args:
+#     chdir: "{{nearrtric_repo_path}}"
+#
+# - debug:
+#     msg: "{{ onboarded_xApps_readiness.stdout_lines }}"
+#
+# - name: Step 6. Deploy HelloWorld xApp
+#   shell: |
+#     curl --location --request POST "http://localhost:32080/appmgr/ric/v1/xapps"  --header 'Content-Type: application/json'  --data-raw '{"xappName": "hwxapp"}'
+#   register: deploy_xApps_readiness
+#   args:
+#     chdir: "{{nearrtric_repo_path}}"
+#
+# - debug:
+#     msg: "{{ onboarded_xApps_readiness.stdout_lines }}"

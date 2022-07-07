@@ -1,0 +1,13 @@
+    ric: |
+      [
+        {
+          "name":"ric1",
+          "baseUrl":"http://192.168.0.0:32080/a1mediator",
+          "controller": "controller1",
+          "managedElementIds":
+          [
+             "kista_1",
+             "kista_2"
+          ]
+        }
+      ]

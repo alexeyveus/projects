@@ -1,0 +1,5 @@
+---
+# vars file for srsran
+libzmq_repo_path: "/root/repo/srsran/libzmq"
+czmq_repo_path: "/root/repo/srsran/czmq"
+srsran_repo_path: "/root/repo/srsran/srsran"

@@ -1,0 +1,107 @@
+---
+- name: Cleanup old repo folder
+  file:
+    path: "{{smo_repo_path}}"
+    state: absent
+
+- name: Step 1. Obtaining the Deployment Scripts and Charts. Checkout o-ran repo, bronze branch
+  git:
+    repo: 'http://gerrit.o-ran-sc.org/r/it/dep'
+    dest: "{{smo_repo_path}}"
+    version: bronze
+    force: yes
+
+- shell: "git submodule update --init --recursive --remote"
+  args:
+    chdir: "{{smo_repo_path}}"
+
+- name: Step 2. Generation of cloud-init Script
+  blockinfile:
+    path: "{{smo_repo_path}}/tools/k8s/etc/infra.rc"
+    block: |
+      INFRA_DOCKER_VERSION="{{INFRA_DOCKER_VERSION}}"
+      INFRA_K8S_VERSION="{{INFRA_K8S_VERSION}}"
+      INFRA_CNI_VERSION="{{INFRA_CNI_VERSION}}"
+      INFRA_HELM_VERSION="{{INFRA_HELM_VERSION}}"
+    mode: 0644
+    marker: "# {mark} ANSIBLE MANAGED BLOCK"
+
+- shell: "./gen-cloud-init.sh"
+  args:
+    chdir: "{{smo_repo_path}}/tools/k8s/bin"
+
+- name: Fix old helm, kong repo urls and version
+  shell: |
+    sed -i 's|https://storage.googleapis.com/kubernetes-helm|https://get.helm.sh|' $(find $PWD -name 'k8s-1node*')
+    sed -i 's|helm init|helm init --stable-repo-url=https://charts.helm.sh/stable|' $(find $PWD -name 'k8s-1node*')
+  args:
+    chdir: "{{smo_repo_path}}/tools/k8s/bin"
+    warn: no
+
+- name: Step 3. Installation of Kubernetes, Helm, Docker, etc.
+  shell: "nohup bash -c '$(find $PWD -name 'k8s*') &> step3.output' &"
+  args:
+    chdir: "{{smo_repo_path}}/tools/k8s/bin"
+
+- debug:
+    msg:
+    - "Step 3 deployment successfully launched. Usually it takes ~3-5mins. SMO Node will be rebooted after completion."
+    - "To observe installation progress please use command in the new terminal window under the root privileges:"
+    - "-------------------------------------------------"
+    - "tail -f /root/dep/tools/k8s/bin/step3.output"
+
+- name: Wait for system to become reachable over SSH
+  wait_for_connection:
+    sleep: 60
+    delay: 300
+    timeout: 900
+
+- shell: "kubectl get pods -A"
+  register: k8s_pods_readiness
+
+- debug:
+    msg: "{{ k8s_pods_readiness.stdout_lines }}"
+
+- name: Copy requirements.txt file to the smo/bin folder
+  copy:
+    src: "{{ role_path }}/files/requirements.txt"
+    dest: "{{smo_repo_path}}/smo/bin/requirements.txt"
+
+- name: Copy ric.txt file to the smo/bin folder
+  copy:
+    src: "{{ role_path }}/files/ric.txt"
+    dest: "{{smo_repo_path}}/smo/bin/ric.txt"
+
+- name: Copy example_receipt.conf file to the smo/bin folder
+  copy:
+    src: "{{ role_path }}/files/example_receipt.conf"
+    dest: "{{smo_repo_path}}/smo/bin/example_receipt.conf"
+
+- name: Copy kong_image_path_fix file to the smo/bin folder
+  copy:
+    src: "{{ role_path }}/files/kong_image_path_fix"
+    dest: "{{smo_repo_path}}/smo/bin/kong_image_path_fix"
+
+- name: Step 4. Deploy SMO
+  shell: |
+    sed -i 's|make all; make onap|make -e SKIP_LINT=TRUE all; make -e SKIP_LINT=TRUE onap|' install
+    sed -i 's|helm init|helm init --stable-repo-url=https://charts.helm.sh/stable|' install
+    sed -i 's|${REPOROOTDIR}/RECIPE_EXAMPLE/NONRTRIC/example_recipe.yaml|~/dep/smo/bin/smo-deploy/smo-dep/nonrtric/RECIPE_EXAMPLE/example_recipe.yaml|' install
+    sed -i 's|192.168.0.0|{{nearrtric_private_ip}}|' ric.txt
+    sed -i -e '/cd bin/r requirements.txt' install
+    sed -i -e '/gerrit.o-ran-sc.org/r example_receipt.conf' install
+    sed -i -e '/kubectl create ns ricinfra/r kong_image_path_fix' install
+    nohup bash -c './install initlocalrepo &> step4.output' &
+  args:
+    chdir: "{{smo_repo_path}}/smo/bin"
+    warn: no
+
+- debug:
+    msg:
+    - "Step 4 SMO service deployment successfully launched."
+    - "To observe installation progress please use command in the new terminal window under the root privileges:"
+    - "-------------------------------------------"
+    - "tail -f /root/dep/smo/bin/step4.output"
+    - "-------------------------------------------"
+    - "Upon successful deployment, the 'kubectl get pods -A' command should show 8 pods in nonrtric namespace,"
+    - "27 pods/jobs in onap namespace, and 2 pods in ricaux name space, all in Running or Completed state."

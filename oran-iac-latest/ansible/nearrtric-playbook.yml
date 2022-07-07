@@ -1,0 +1,8 @@
+---
+# Configure and deploy SMO service using Ansible SMO Role
+- name: nearrtric role
+  hosts: all
+  become: true
+  gather_facts: False
+  roles:
+    - { role: nearrtric, tags: "nearrtric" }

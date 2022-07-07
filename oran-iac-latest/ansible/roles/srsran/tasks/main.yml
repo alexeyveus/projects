@@ -1,0 +1,85 @@
+---
+# tasks file for srsran
+- name: Step 1. Upgrade the OS (apt-get dist-upgrade)
+  apt:
+    update_cache: yes
+    upgrade: dist
+
+- name: Step 2. Install libzmq and czmq required packages
+  apt:
+    pkg:
+      - libzmq3-dev
+      - libtool
+      - autoconf
+      - make
+      - pkg-config
+      - git
+    state: latest
+    update_cache: yes
+
+- name: Step 3. Clone libzmq (asynchronous network messaging library) repo.
+  git:
+    repo: 'http://gerrit.o-ran-sc.org/r/it/dep'
+    dest: "{{libzmq_repo_path}}"
+    version: master
+    force: yes
+
+- name: Step 4. Build libzmq (asynchronous network messaging library) with appropriate scripts.
+  shell: |
+    ./autogen.sh
+    ./configure
+    make
+    make install
+    ldconfig
+  args:
+    chdir: "{{libzmq_repo_path}}"
+
+- name: Step 5. Clone czmq (High-level C Binding for ZeroMQ) repo.
+  git:
+    repo: 'https://github.com/zeromq/czmq.git'
+    dest: "{{czmq_repo_path}}"
+    version: master
+    force: yes
+
+- name: Step 6. Build czmq
+  shell: |
+    ./autogen.sh
+    ./configure
+    make
+    make install
+    ldconfig
+  args:
+    chdir: "{{czmq_repo_path}}"
+
+- name: Step 7. Install srsRAN required packages
+  apt:
+    pkg:
+      - cmake
+      - libfftw3-dev
+      - libmbedtls-dev
+      - libboost-program-options-dev
+      - libconfig++-dev
+      - libsctp-dev
+    state: latest
+    update_cache: yes
+
+- name: Step 8. Clone czmq (High-level C Binding for ZeroMQ) repo.
+  git:
+    repo: 'https://github.com/zeromq/czmq.git'
+    dest: "{{srsran_repo_path}}"
+    version: master
+    force: yes
+
+- name: Step 9. Build czmq
+  shell: |
+    mkdir build
+    cd build
+    cmake ../
+    make
+    make test
+    sudo make install
+    ls -l ~/.config
+    sudo srsran_install_configs.sh user
+    cd ~ && sudo ldconfig
+  args:
+    chdir: "{{srsran_repo_path}}"

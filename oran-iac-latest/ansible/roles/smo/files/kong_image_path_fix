@@ -1,0 +1,1 @@
+sed -i 's|kong-docker-kubernetes-ingress-controller.bintray.io/kong-ingress-controller|kong/kubernetes-ingress-controller|' ~/dep/smo/bin/smo-deploy/smo-dep/ric-aux/helm/infrastructure/subcharts/kong/values.yaml

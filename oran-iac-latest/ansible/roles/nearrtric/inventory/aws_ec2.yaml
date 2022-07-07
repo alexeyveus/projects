@@ -1,0 +1,15 @@
+---
+# Minimal example using environment vars or instance role credentials
+# Fetch all hosts in eu-west-1, the hostname is the public DNS if it exists, otherwise the private IP address
+plugin: aws_ec2
+regions:
+  - eu-west-1
+aws_profile: neueda_aws_profile
+filters:
+  # All instances with their `o-ran-smo` tag set to `smo`
+  tag:o-ran-role: nearrtric
+instance-state-name : running
+compose:
+  # Use the public IP address to connect to the host
+  # (note: this does not modify inventory_hostname, which is set via I(hostnames))
+  ansible_host: public_ip_address

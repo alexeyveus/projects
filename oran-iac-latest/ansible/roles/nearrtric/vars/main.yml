@@ -1,0 +1,9 @@
+---
+nearrtric_repo_path: "/root/repo/dep"
+
+nearrtric_helm_version: "2.16.12"
+
+# INFRA_DOCKER_VERSION: ""
+# INFRA_K8S_VERSION: "1.16.0"
+# INFRA_CNI_VERSION: "0.7.5"
+# INFRA_HELM_VERSION: "2.16.12"

@@ -1,0 +1,42 @@
+cat << EOF >> /root/dep/smo/bin/smo-deploy/smo-dep/nonrtric/helm/nonrtric/requirements.yaml
+dependencies:
+  - name: a1controller
+    version: ~2.0.0
+    repository: "@local"
+    condition: nonrtric.installA1controller
+
+  - name: a1simulator
+    version: ~2.0.0
+    repository: "@local"
+    condition: nonrtric.installA1simulator
+
+  - name: controlpanel
+    version: ~2.0.0
+    repository: "@local"
+    condition: nonrtric.installControlpanel
+
+  - name: policymanagementservice
+    version: ~2.0.0
+    repository: "@local"
+    condition: nonrtric.installPms
+
+  - name: enrichmentservice
+    version: ~1.0.0
+    repository: "@local"
+    condition: nonrtric.installEnrichmentservice
+
+  - name: nonrtric-common
+    version: ^2.0.0
+    repository: "@local"
+    condition: true
+
+  - name: rappcatalogueservice
+    version: ~1.0.0
+    repository: "@local"
+    condition: nonrtric.installRappcatalogueservice
+
+  - name: nonrtricgateway
+    version: ~1.0.0
+    repository: "@local"
+    condition: nonrtric.installNonrtricgateway
+EOF
