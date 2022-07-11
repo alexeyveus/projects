@@ -1,0 +1,30 @@
+AWS+Terraform task.
+
+In order to deploy the AWS + Terraform infrastructure from appropriate task definition, need implement following steps:
+
+1. On the local host on which the terraform code will be executed set the correct AWS ACCESS_KEY SECRET_KEY in the aws ~ / .aws / credentials configuration file
+It is also possible in the terraform code in the backend.tf and data.tf files to replace the value 'default' with the value aws of the account in the context of which the code must be executed.
+The default value is used in the code: profile = "default"
+
+2. Manually create at AWS account DynamoDB table for remote storage of infrastructure state in s3 bucket.
+The default table name is "wiki-terraform". When creating tables, be sure to specify Primary partition key = LockID (String)
+
+3. Terraform code was tested on version v0.11.14. Using other versions of terraform will require changes to the templates syntax.
+Terraform v0.11.14 can be downloaded using commands
+wget https://releases.hashicorp.com/terraform/0.11.14/terraform_0.11.14_linux_amd64.zip
+unzip terraform_0.11.14_linux_amd64.zip
+sudo mv terraform/usr/local/bin/terraform
+
+4. To create a new network infrastructure, it is necessary to execute the code in the root folder of the project:
+    terraform init
+    terroform apply
+
+5. Need change SSH public key name at web-wiki.tf template. Now specify my pubclic key. You can use already imported key from AWS account.
+
+    key_name = "aleksey_key"
+
+6. After creating the network infrastructure, it is necessary one by one run the commands at 'web-wiki' and 'aurora' folders:
+    terraform init
+    terroform apply
+
+7. Next, open at any browser the public DNS address (or IP) of ec2 instance and configure the mediawiki server.
