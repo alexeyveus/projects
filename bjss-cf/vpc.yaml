@@ -1,0 +1,100 @@
+Description: BJSS interview CF template
+
+Parameters:
+  VpcCIDR:
+    Description: IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.1.0.0/16
+
+  PublicSubnet1CIDR:
+    Description: IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.1.1.0/24
+
+  RegionAvailabilityZone:
+    Description: Availability Zones
+    Type: String
+    Default: eu-west-1a
+    AllowedValues:
+      - eu-west-1a
+      - eu-west-1b
+
+  EnvironmentName:
+    Description: What is this ENV for
+    Type: String
+    Default: bjss
+
+Resources:
+  bjssVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsHostnames: false
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: bjss_interview_cloudFormation
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref RegionAvailabilityZone  # !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+      VpcId: !Ref bjssVPC
+
+  IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref IGW
+      VpcId: !Ref bjssVPC
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref bjssVPC
+      Tags:
+        - Key: Name
+          Value: bjss_interview_cloudFormation
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+
+  PublicRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+Outputs:
+  VPC:
+    Description: A reference to the created VPC
+    Value: !Ref bjssVPC
+    Export:
+      Name: bjssVPC
+
+  PublicSubnetAZA:
+    Description: A reference to the created VPC
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: PublicSubnetAZA
+
+  IGW:
+    Description: IGW ID
+    Value: !Ref IGW

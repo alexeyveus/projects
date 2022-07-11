@@ -1,0 +1,66 @@
+Parameters:
+  InstanceTypeParameter:
+    Type: String
+    Default: t2.micro
+
+  AMIID:
+    Type: AWS::EC2::Image::Id
+    Default: "ami-0d71ea30463e0ff8d"
+
+  KeyName:
+    Type: String
+    Default: Alexey_public_key
+
+  EnvironmentName:
+    Description: What is this ENV for
+    Type: String
+    Default: bjss
+
+Resources:
+  PublicSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: allow connections from specified CIDR ranges
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      VpcId: !ImportValue 'bjssVPC'
+      Tags:
+        - Key: Name
+          Value: bjss_interview_cloudFormation
+
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeParameter
+      ImageId: !Ref AMIID
+      SecurityGroupIds: [ !Ref PublicSecurityGroup ]
+      SubnetId: !ImportValue 'PublicSubnetAZA'
+      KeyName: !Ref KeyName
+      UserData:
+        Fn::Base64: |
+            #!/bin/bash
+            yum -y update
+            yum -y install httpd
+            PrivateIP=`curl http://169.254.169.254/latest/meta-data/local-ipv4`
+            echo "<h2>Webserver with private IP: $PrivateIP.<h2><br> EC2 instance created by CloudFormation" > /var/www/html/index.html
+            service httpd start
+            chkconfig httpd on
+      Tags:
+        - Key: Name
+          Value: bjss_interview_cloudFormation
+
+Outputs:
+  Ec2Instance:
+    Description: ec2 instance
+    Value: !Ref Ec2Instance
