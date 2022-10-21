@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"editor.formatOnSave": true,
+		"javascript.format.semicolons": "insert",
+		"eslint.format.enable": true,
+		"editor.tabSize": 2,
+		"eslint.alwaysShowStatus": true,
+		"editor.codeActionsOnSave": {
+			"source.fixAll.eslint": true
+		}
+	},
+	"eslint.codeAction.disableRuleComment": {}
+}

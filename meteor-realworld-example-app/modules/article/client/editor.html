@@ -1,0 +1,49 @@
+<template name="editor">
+  <div class="editor-page">
+    <div class="container page">
+      <div class="row">
+        {{#if Template.subscriptionsReady}}
+
+        <div class="col-md-10 offset-md-1 col-xs-12">
+
+          {{#if instance.errors.list.length}}
+          <ul class="error-messages">
+            {{#each error in instance.errors.list}}
+            <li>{{error}}</li>
+            {{/each}}
+          </ul>
+          {{/if}}
+
+          <form>
+            <fieldset>
+              <fieldset class="form-group">
+                <input type="text" class="form-control form-control-lg" placeholder="Article Title" name="title"
+                  value={{article.title}}>
+              </fieldset>
+              <fieldset class="form-group">
+                <input type="text" class="form-control" placeholder="What's this article about?" name="description"
+                  value={{article.description}}>
+              </fieldset>
+              <fieldset class="form-group">
+                <textarea class="form-control" rows="8" placeholder="Write your article (in markdown)"
+                  name="body">{{article.body}}</textarea>
+              </fieldset>
+              <fieldset class="form-group">
+                <input type="text" class="form-control" placeholder="Enter tags" name="tag">
+                <div class="tag-list">
+                  {{#each tag in instance.tagList.get}}
+                  <span class="tag-default tag-pill"><i class="ion-close-round js-tags-remove"></i>&nbsp;{{tag}}</span>
+                  {{/each}}
+                </div>
+              </fieldset>
+              <button class="btn btn-lg pull-xs-right btn-primary" type="button">
+                Publish Article
+              </button>
+            </fieldset>
+          </form>
+        </div>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</template>

@@ -1,0 +1,306 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: ost-test-ecscluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+###############################################################################
+  CloudwatchLogsGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Join
+        - '-'
+        - - ECSLogGroup
+          - !Ref 'AWS::StackName'
+      RetentionInDays: 14
+###############################################################################
+  TaskdefinitionFrontendDev:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: "ost-test-frontend-dev-td"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: 1024
+      Memory: 2GB
+      ExecutionRoleArn: !Ref ecsTaskDefExecutionRole
+      TaskRoleArn: !Ref ecsTaskDefExecutionRole
+      NetworkMode: awsvpc
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: ost-test-frontend
+          Cpu: '1024'
+          Essential: 'true'
+          Image: '692194326861.dkr.ecr.eu-west-1.amazonaws.com/ost-test-frontend:latest'
+          Memory: '2048'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudwatchLogsGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: ost-test-frontend-dev
+          PortMappings:
+            - ContainerPort: 3000
+      Tags:
+        - Key: Env
+          Value: Dev
+
+###############################################################################
+  ECSALBDev:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: ost-test-alb-dev
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets:
+        - !ImportValue 'ost-vpc-stack-Public-Subnet1-ID'
+        - !ImportValue 'ost-vpc-stack-Public-Subnet2-ID'
+      SecurityGroups:
+        - !ImportValue 'ost-vpc-stack-PubHttpSG-ID'
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  ALBListenerDev:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTGDev
+      LoadBalancerArn: !Ref ECSALBDev
+      Port: '80'
+      Protocol: HTTP
+
+  ECSALBDevListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTGDev
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /
+      ListenerArn: !Ref ALBListenerDev
+      Priority: 1
+
+  ECSTGDev:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    DependsOn: ECSALBDev
+    Properties:
+      TargetType: ip
+      HealthCheckIntervalSeconds: 300
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 120
+      HealthyThresholdCount: 3
+      Name: ECSTGDev
+      Port: 3000
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !ImportValue 'ost-vpc-stack-VPCID'
+      Tags:
+        - Key: Env
+          Value: Dev
+###############################################################################
+  ECSServiceFrontendDev:
+    Type: 'AWS::ECS::Service'
+    DependsOn: ALBListenerDev
+    Properties:
+      ServiceName: ost-test-frontend-dev-service
+      Cluster: !Ref ECSCluster
+      CapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 10
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !ImportValue 'ost-vpc-stack-FrontendSG-ID'
+          Subnets:
+            - !ImportValue 'ost-vpc-stack-Public-Subnet1-ID'
+            - !ImportValue 'ost-vpc-stack-Public-Subnet2-ID'
+      DesiredCount: '1'
+      LoadBalancers:
+        - ContainerName: ost-test-frontend
+          ContainerPort: '3000'
+          TargetGroupArn: !Ref ECSTGDev
+      TaskDefinition: !Ref TaskdefinitionFrontendDev
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      ServiceRegistries:
+        - ContainerName: ost-test-frontend
+          RegistryArn: !GetAtt DiscoveryServiceFrontendDev.Arn
+      Tags:
+        - Key: Env
+          Value: Dev
+
+###############################################################################
+  ecsTaskDefExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: ost-test-ECSTaskExecutionRole
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess
+
+  EC2Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:CreateCluster'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Poll'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:StartTelemetrySession'
+                  - 'ecs:Submit*'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+###############################################################################
+  OSTPrivateNamespaceDev:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: ost-test-dev.local
+      Vpc: !ImportValue 'ost-vpc-stack-VPCID'
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  DiscoveryServiceFrontendDev:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Description: Frontend Dev Discovery Service for the OST test App
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - TTL: 60
+            Type: A
+      HealthCheckCustomConfig:
+        FailureThreshold: 2
+      Name: ost-test-frontend-dev-svc
+      NamespaceId: !Ref OSTPrivateNamespaceDev
+      Tags:
+        - Key: Env
+          Value: Dev
+
+###############################################################################
+  ScalableTargetFrontendDev:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      RoleARN: !GetAtt AutoScalingRole.Arn
+      ResourceId: service/ost-test-ecscluster/ost-test-frontend-dev-service
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: 1
+      MaxCapacity: 3
+    DependsOn: ECSServiceFrontendDev
+
+  ScalingPolicyFrontendDev:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: ecs-service-auto-scaling-policy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTargetFrontendDev
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 75.0
+
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: service-auto-scaling-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [application-autoscaling.amazonaws.com]
+            Action: ["sts:AssumeRole"]
+      Policies:
+        - PolicyName: service-auto-scaling-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:UpdateService
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:DeleteAlarms
+                Resource:
+                  - "*"
+###############################################################################
+Outputs:
+  OSTPrivateNamespace:
+    Value: !Ref OSTPrivateNamespaceDev
+    Export:
+      Name: 'OSTPrivateNamespace'
+
+  TaskDefExecutionRole:
+    Value: !Ref ecsTaskDefExecutionRole
+    Export:
+      Name: 'TaskDefExecutionRole'
+
+  CloudwatchLogsGroup:
+    Value: !Ref CloudwatchLogsGroup
+    Export:
+      Name: 'CloudwatchLogsGroup'
+
+  ECSServiceFrontendDev:
+    Value: !Ref ECSServiceFrontendDev
+
+  ECSCluster:
+    Value: !Ref ECSCluster
+    Export:
+      Name: 'ECSCluster'
+
+  ECSALBDev:
+    Description: Your ALB Dev DNS URL
+    Value: !Join
+      - ''
+      - - !GetAtt
+          - ECSALBDev
+          - DNSName
+
+  TaskdefFrontDev:
+    Value: !Ref TaskdefinitionFrontendDev

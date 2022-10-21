@@ -1,0 +1,145 @@
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <link rel="icon" href="<%= BASE_URL %>favicon.ico">
+  <title>Conduit</title>
+  <!-- Import Ionicon icons & Google Fonts our Bootstrap theme relies on -->
+  <link href="//code.ionicframework.com/ionicons/2.0.1/css/ionicons.min.css" rel="stylesheet" type="text/css">
+  <link
+    href="//fonts.googleapis.com/css?family=Titillium+Web:700|Source+Serif+Pro:400,700|Merriweather+Sans:400,700|Source+Sans+Pro:400,300,600,700,300italic,400italic,600italic,700italic"
+    rel="stylesheet" type="text/css">
+  <!-- Import the custom Bootstrap 4 theme from our hosted CDN -->
+  <link rel="stylesheet" href="https://demo.productionready.io/main.css">
+
+  <meteor-bundled-css>
+
+</head>
+
+<template name="header">
+  <nav class="navbar navbar-light">
+    <div class="container">
+      <a class="navbar-brand" href="/">conduit</a>
+      <ul class="nav navbar-nav pull-xs-right">
+        <li class="nav-item">
+          <a class="nav-link {{#if isRouteName 'home'}}active{{/if}}" href="/">Home</a>
+        </li>
+        {{#if currentUser}}
+        <li class="nav-item">
+          <a class="nav-link" href="/editor">
+            <i class="ion-compose"></i>&nbsp;New Post
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {{#if isRouteName 'settings'}}active{{/if}}" href="/settings">
+            <i class="ion-gear-a"></i>&nbsp;Settings
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {{#if isCurrentUserProfile}}active{{/if}}" href="/profile/{{currentUser.username}}">
+            {{currentUser.username}}
+          </a>
+        </li>
+        {{else}}
+        <li class="nav-item">
+          <a class="nav-link" href="/login">Sign in</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/register">Sign up</a>
+        </li>
+        {{/if}}
+      </ul>
+    </div>
+  </nav>
+</template>
+
+<template name="footer">
+  <footer>
+    <div class="container">
+      <a href="/" class="logo-font">conduit</a>
+      <span class="attribution">
+        An interactive learning project from <a href="https://thinkster.io">Thinkster</a>. Code &amp; design licensed
+        under MIT.
+      </span>
+    </div>
+  </footer>
+</template>
+
+<template name="home">
+  <div class="home-page">
+
+    <div class="banner">
+      <div class="container">
+        <h1 class="logo-font">conduit</h1>
+        <p>A place to share your knowledge.</p>
+      </div>
+    </div>
+
+    <div class="container page">
+      <div class="row">
+
+        <div class="col-md-9">
+          <div class="feed-toggle">
+            {{#if logginIn}}
+            Logging in...
+            {{else}}
+            <ul class="nav nav-pills outline-active">
+              <li class="nav-item">
+                <a class="nav-link {{#if eq instance.feed.get 'mine'}}active{{else unless currentUser}}disabled{{/if}} js-home-feed"
+                  href="/" data-feed="mine">Your Feed</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{#if eq instance.feed.get 'global'}}active{{else}}js-home-feed{{/if}}" href="/"
+                  data-feed="global">Global Feed</a>
+              </li>
+              {{#if isFeedTag}}
+              <li class="nav-item">
+                <a class="nav-link active" href="/" data-show-my-feed="false">#&nbsp;{{instance.feed.get}}</a>
+              </li>
+              {{/if}}
+            </ul>
+            {{/if}}
+          </div>
+
+
+          {{#if Template.subscriptionsReady}}
+          {{#each articles}}
+          {{> articlePreview}}
+          {{/each}}
+          <nav>
+            <ul class="pagination">
+              {{#if instance.offset.get}}
+              <li class="page-item "><a class="page-link js-offset-update" data-offset="-20" href="/">Newer</a> </li>
+              {{/if}}
+              <li class="page-item "><a class="page-link js-offset-update" data-offset="20" href="/">Older</a> </li>
+            </ul>
+          </nav>
+          {{else}}
+          Loading...
+          {{/if}}
+
+        </div>
+
+        <div class="col-md-3">
+          <div class="sidebar">
+            <p>Popular Tags</p>
+
+            <div class="tag-list">
+              {{#each tag in instance.popularTags.get}}
+              <a href="" class="tag-pill tag-default js-home-feed" data-feed="{{tag}}">{{tag}}</a>
+              {{/each}}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</template>
+
+<template name="layout">
+  {{> header}}
+  {{> Template.dynamic template=content}}
+  {{> footer}}
+</template>

@@ -1,0 +1,148 @@
+<template name="article">
+  {{#if Template.subscriptionsReady}}
+  {{#with article}}
+  <div class="article-page">
+
+    <div class="banner">
+      <div class="container">
+
+        <h1>{{title}}</h1>
+
+        {{> articleMeta}}
+      </div>
+    </div>
+
+    <div class="container page">
+
+      <div class="row article-content">
+        <div class="col-md-12">
+          {{{marked body}}}
+          <ul class="tag-list">
+            {{#each tag in tagList}}
+            <li class="tag-default tag-pill tag-outline">{{tag}}</li>
+            {{/each}}
+          </ul>
+        </div>
+      </div>
+
+      <hr />
+
+      <div class="article-actions">
+        {{> articleMeta}}
+      </div>
+
+      <div class="row">
+
+        <div class="col-xs-12 col-md-8 offset-md-2">
+          {{#if currentUser}}
+          <form class="card comment-form">
+            <div class="card-block">
+              <textarea class="form-control" placeholder="Write a comment..." rows="3" name="comment"></textarea>
+            </div>
+            <div class="card-footer">
+              <img src="{{currentUser.picture}}" class="comment-author-img" />
+              <button class="btn btn-sm btn-primary">
+                Post Comment
+              </button>
+            </div>
+          </form>
+          {{else}}
+          <p><a href="/login">Sign in</a> or <a href="/register">sign up</a> to add comments on this article.</p>
+          {{/if}}
+
+          {{#each comments}}
+          {{> comment}}
+          {{/each}}
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+  {{/with}}
+  {{else}}
+  Loading...
+  {{/if}}
+</template>
+
+<template name="articlePreview">
+  <div class="article-preview">
+    {{> articleMeta}}
+    <a href="{{path 'article' slug=slug}}" class="preview-link">
+      <h1>{{title}}</h1>
+      <p>{{description}}</p>
+      <span>Read more...</span>
+      <ul class="tag-list">
+        {{#each tag in tagList}}
+        <li class="tag-default tag-pill tag-outline">{{tag}}</li>
+        {{/each}}
+      </ul>
+    </a>
+  </div>
+</template>
+
+<template name="articleMeta">
+  <div class="article-meta">
+    <a href="{{path 'profile' username=author.username}}"><img src="{{author.picture}}" /></a>
+    <div class="info">
+      <a href="{{path 'profile' username=author.username}}" class="author">{{author.username}}</a>
+      <span class="date">{{dateFormat createdAt}}</span>
+    </div>
+    {{#if isRouteName 'article'}}
+    {{#if isAuthor}}
+    <a class="btn btn-sm {{#if author.isFavorited}}btn-secondary{{else}}btn-outline-secondary{{/if}}"
+      href="{{path 'editor' slug=slug}}">
+      <i class="ion-edit"></i>
+      &nbsp;Edit Article
+    </a>
+    &nbsp;&nbsp;
+    <button class="btn btn-sm btn-outline-danger js-article-delete">
+      <i class="ion-trash"></i>
+      &nbsp;Delete Article
+    </button>
+    {{else}}
+    <button class=" btn btn-sm {{#if author.isFavorited}}btn-secondary{{else}}btn-outline-secondary{{/if}}
+      js-author-favorite">
+      <i class="ion-plus-round"></i>
+      &nbsp;
+      Follow {{author.username}} <span class="counter">({{count author.profile.followerIds}})</span>
+    </button>
+    &nbsp;&nbsp;
+    <button
+      class="btn btn-sm {{#if this.isFavorited}}btn-primary{{else}}btn-outline-primary{{/if}} js-article-favorite">
+      <i class="ion-heart"></i>
+      &nbsp;
+      Favorite Post <span class="counter">({{count favorites}})</span>
+    </button>
+    {{/if}}
+    {{else}}
+    <button
+      class="btn {{#if this.isFavorited}}btn-primary{{else}}btn-outline-primary{{/if}} btn-sm pull-xs-right js-article-favorite">
+      <i class="ion-heart"></i> {{favorites.length}}
+    </button>
+    {{/if}}
+  </div>
+</template>
+
+<template name="comment">
+  <div class="card">
+    <div class="card-block">
+      <p class="card-text">{{body}}</p>
+    </div>
+    <div class="card-footer">
+      <a href="{{path 'profile' username=author.username}}" class="comment-author">
+        <img src="{{author.picture}}" class="comment-author-img" />
+      </a>
+      &nbsp;
+      <a href="{{path 'profile' username=author.username}}" class="comment-author">{{username}}</a>
+      <span class="date-posted">{{dateFormat createdAt}}</span>
+      {{#if isAuthor}}
+      <span class="mod-options">
+        <!-- <i class="ion-edit"></i> -->
+        <i class="ion-trash-a js-comment-delete"></i>
+      </span>
+      {{/if}}
+    </div>
+  </div>
+</template>

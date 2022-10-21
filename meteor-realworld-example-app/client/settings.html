@@ -1,0 +1,53 @@
+<template name="settings">
+  <div class="settings-page">
+    <div class="container page">
+      <div class="row">
+
+        <div class="col-md-6 offset-md-3 col-xs-12">
+          <h1 class="text-xs-center">Your Settings</h1>
+
+          {{#if instance.errors.get.length}}
+          <ul class="error-messages">
+            {{#each instance.errors.get}}
+            <li>{{message}}</li>
+            {{/each}}
+          </ul>
+          {{/if}}
+
+          <form>
+            <fieldset>
+              <fieldset class="form-group">
+                <input class="form-control" type="text" placeholder="URL of profile picture" name="picture"
+                  value="{{currentUser.profile.picture}}">
+              </fieldset>
+              <fieldset class="form-group">
+                <input class="form-control form-control-lg" type="text" placeholder="Your Name" name="username"
+                  value="{{currentUser.username}}">
+              </fieldset>
+              <fieldset class="form-group">
+                <textarea class="form-control form-control-lg" rows="8" placeholder="Short bio about you" name="bio"
+                  value="{{currentUser.profile.bio}}"></textarea>
+              </fieldset>
+              <fieldset class="form-group">
+                <input class="form-control form-control-lg" type="text" placeholder="Email" name="email"
+                  value="{{emailAddress}}">
+              </fieldset>
+              <fieldset class="form-group">
+                <input class="form-control form-control-lg" type="password" placeholder="Old Password"
+                  name="oldPassword">
+              </fieldset>
+              <fieldset class="form-group">
+                <input class="form-control form-control-lg" type="password" placeholder="New Password"
+                  name="newPassword">
+              </fieldset>
+              <button class="btn btn-lg btn-primary pull-xs-right">
+                Update Settings
+              </button>
+            </fieldset>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</template>
