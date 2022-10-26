@@ -1,0 +1,384 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: invicara-ecscluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+###############################################################################
+  CloudwatchLogsGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Join
+        - '-'
+        - - ECSLogGroup
+          - !Ref 'AWS::StackName'
+      RetentionInDays: 14
+###############################################################################
+  TaskdefinitionFrontendDev:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: "invicara-frontend-dev-td"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: 512
+      Memory: 1GB
+      ExecutionRoleArn: !Ref ecsTaskDefExecutionRole
+      TaskRoleArn: !Ref ecsTaskDefExecutionRole
+      NetworkMode: awsvpc
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: invicara-frontend
+          Cpu: '512'
+          Essential: 'true'
+          Image: '692194326861.dkr.ecr.eu-west-1.amazonaws.com/rest-key-value:latest'
+          Memory: '1024'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudwatchLogsGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: invicara-frontend-dev
+          PortMappings:
+            - ContainerPort: 3000
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  TaskdefinitionRedisDev:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: "invicara-redis-dev-td"
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: 512
+      Memory: 1GB
+      ExecutionRoleArn: !Ref ecsTaskDefExecutionRole
+      TaskRoleArn: !Ref ecsTaskDefExecutionRole
+      NetworkMode: awsvpc
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: invicara-redis
+          Cpu: '512'
+          Essential: 'true'
+          Image: 'redis:7.0.5-alpine'
+          Memory: '1024'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudwatchLogsGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: invicara-redis-dev
+          PortMappings:
+            - ContainerPort: 6379
+      Tags:
+        - Key: Env
+          Value: Dev
+###############################################################################
+  ECSALBDev:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: invicara-alb-dev
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets:
+        - !ImportValue 'invicara-vpc-stack-Public-Subnet1-ID'
+        - !ImportValue 'invicara-vpc-stack-Public-Subnet2-ID'
+      SecurityGroups:
+        - !ImportValue 'invicara-vpc-stack-PubHttpSG-ID'
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  ALBListenerDev:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTGDev
+      LoadBalancerArn: !Ref ECSALBDev
+      Port: '80'
+      Protocol: HTTP
+
+  ECSALBDevListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTGDev
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /
+      ListenerArn: !Ref ALBListenerDev
+      Priority: 1
+
+  ECSTGDev:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    DependsOn: ECSALBDev
+    Properties:
+      TargetType: ip
+      HealthCheckIntervalSeconds: 300
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 120
+      HealthyThresholdCount: 3
+      Name: ECSTGDev
+      Port: 3000
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !ImportValue 'invicara-vpc-stack-VPCID'
+      Tags:
+        - Key: Env
+          Value: Dev
+###############################################################################
+  ECSServiceFrontendDev:
+    Type: 'AWS::ECS::Service'
+    DependsOn: ALBListenerDev
+    Properties:
+      ServiceName: invicara-frontend-dev-service
+      Cluster: !Ref ECSCluster
+      CapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 10
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !ImportValue 'invicara-vpc-stack-FrontendSG-ID'
+          Subnets:
+            - !ImportValue 'invicara-vpc-stack-Public-Subnet1-ID'
+            - !ImportValue 'invicara-vpc-stack-Public-Subnet2-ID'
+      DesiredCount: '1'
+      LoadBalancers:
+        - ContainerName: invicara-frontend
+          ContainerPort: '3000'
+          TargetGroupArn: !Ref ECSTGDev
+      TaskDefinition: !Ref TaskdefinitionFrontendDev
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      ServiceRegistries:
+        - ContainerName: invicara-frontend
+          RegistryArn: !GetAtt DiscoveryServiceFrontendDev.Arn
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  ECSServiceRedisDev:
+    Type: 'AWS::ECS::Service'
+    Properties:
+      ServiceName: invicara-redis-dev-service
+      Cluster: !Ref ECSCluster
+      CapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 10
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !ImportValue 'invicara-vpc-stack-FrontendSG-ID'
+          Subnets:
+            - !ImportValue 'invicara-vpc-stack-Public-Subnet1-ID'
+            - !ImportValue 'invicara-vpc-stack-Public-Subnet2-ID'
+      DesiredCount: '1'
+      TaskDefinition: !Ref TaskdefinitionRedisDev
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      ServiceRegistries:
+        - ContainerName: invicara-redis
+          RegistryArn: !GetAtt DiscoveryServiceRedisDev.Arn
+      Tags:
+        - Key: Env
+          Value: Dev
+
+###############################################################################
+  ecsTaskDefExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: invicara-ECSTaskExecutionRole
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess
+
+  EC2Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:CreateCluster'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Poll'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:StartTelemetrySession'
+                  - 'ecs:Submit*'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+###############################################################################
+  invicaraPrivateNamespaceDev:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: invicara-dev.local
+      Vpc: !ImportValue 'invicara-vpc-stack-VPCID'
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  DiscoveryServiceFrontendDev:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Description: Frontend Dev Discovery Service for the invicara test App
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - TTL: 60
+            Type: A
+      HealthCheckCustomConfig:
+        FailureThreshold: 2
+      Name: invicara-frontend-dev-svc
+      NamespaceId: !Ref invicaraPrivateNamespaceDev
+      Tags:
+        - Key: Env
+          Value: Dev
+
+  DiscoveryServiceRedisDev:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Description: Redis Dev Discovery Service for the invicara test App
+      DnsConfig:
+        RoutingPolicy: MULTIVALUE
+        DnsRecords:
+          - TTL: 60
+            Type: A
+      HealthCheckCustomConfig:
+        FailureThreshold: 2
+      Name: invicara-redis-dev-svc
+      NamespaceId: !Ref invicaraPrivateNamespaceDev
+      Tags:
+        - Key: Env
+          Value: Dev
+###############################################################################
+  ScalableTargetFrontendDev:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      RoleARN: !GetAtt AutoScalingRole.Arn
+      ResourceId: service/invicara-ecscluster/invicara-frontend-dev-service
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: 1
+      MaxCapacity: 2
+    DependsOn: ECSServiceFrontendDev
+
+  ScalingPolicyFrontendDev:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: ecs-service-auto-scaling-policy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTargetFrontendDev
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 85.0
+
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: service-auto-scaling-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [application-autoscaling.amazonaws.com]
+            Action: ["sts:AssumeRole"]
+      Policies:
+        - PolicyName: service-auto-scaling-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:UpdateService
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:DeleteAlarms
+                Resource:
+                  - "*"
+###############################################################################
+Outputs:
+  invicaraPrivateNamespace:
+    Value: !Ref invicaraPrivateNamespaceDev
+    Export:
+      Name: 'invicaraPrivateNamespace'
+
+  TaskDefExecutionRole:
+    Value: !Ref ecsTaskDefExecutionRole
+    Export:
+      Name: 'TaskDefExecutionRole'
+
+  CloudwatchLogsGroup:
+    Value: !Ref CloudwatchLogsGroup
+    Export:
+      Name: 'CloudwatchLogsGroup'
+
+  ECSServiceFrontendDev:
+    Value: !Ref ECSServiceFrontendDev
+
+  ECSServiceRedisDev:
+    Value: !Ref ECSServiceRedisDev
+
+  ECSCluster:
+    Value: !Ref ECSCluster
+    Export:
+      Name: 'ECSCluster'
+
+  ECSALBDev:
+    Description: Your ALB Dev DNS URL
+    Value: !Join
+      - ''
+      - - !GetAtt
+          - ECSALBDev
+          - DNSName
+
+  TaskdefFrontDev:
+    Value: !Ref TaskdefinitionFrontendDev
