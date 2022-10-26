@@ -1,0 +1,19 @@
+{
+  "name": "rest-key-value",
+  "version": "1.0.0",
+  "description": "Sample REST API using Express and Redis for managing key-value pairs",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "watch": "NODE_ENV=development nodemon server.js",
+    "start": "NODE_ENV=production node server.js",
+    "test": "echo \"Placeholder for tests\" && exit 0"
+  },
+  "author": "Harlan Barnes <harlan.barnes@invicara.com>",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.17.2",
+    "nodemon": "^2.0.15",
+    "redis": "^4.0.1"
+  }
+}
