@@ -12,7 +12,7 @@
   "author": "Harlan Barnes <harlan.barnes@invicara.com>",
   "license": "UNLICENSED",
   "dependencies": {
-    "express": "^4.17.2",
+    "express": "^4.21.2",
     "nodemon": "^2.0.15",
     "redis": "^4.0.1"
   }
