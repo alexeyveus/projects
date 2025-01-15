@@ -1,0 +1,49 @@
+# Local .terraform directories
+**/.terraform/*
+**/.vscode/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+
+# Ignore any .tfvars files that are generated automatically for each Terraform run. Most
+# .tfvars files are managed as part of configuration and so should be included in
+# version control.
+#
+# example.tfvars
+*.tfvars
+
+# Ignore override files as they are usually used to override resources locally and so
+# are not checked in
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Ignore terraform.tfvars.example and readme.md files that could be accidentally copied
+# into cluster folders
+# Added override for the ones in root_module below in the override list
+**/terraform.tfvars.example
+**/readme.md
+
+# Include override files you do wish to add to version control using negated pattern
+#
+# !example_override.tf
+!/modules/root_module/octopus.tfvars
+!/modules/root_module/readme.md
+!/modules/root_module/terraform.tfvars.example
+!octopus.tfvars
+
+# Continuing v0.13 behavior after upgrading to v0.14 by placing .terraform.lock.hcl in version control "ignore" file .gitignore
+# https://www.terraform.io/upgrade-guides/0-14.html#opting-out-of-dependency-locking
+.terraform.lock.hcl
+
+#*.sh
+
+jenkins.tfvars
+ssh_private_key_docker_host
+
+/modules/jenkins_platform/jenkins-controller/jcasc/jenkins.yaml

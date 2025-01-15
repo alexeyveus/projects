@@ -1,0 +1,513 @@
+credentials:
+  system:
+    domainCredentials:
+    - credentials:
+      - usernamePassword:
+          description: "O365 Jenkins SVN App user for Bitbucket Cloud"
+          id: "O365-Jenkins-SVN-App-pass"
+          password: ${jenkinsBBAppPasswd}
+          scope: GLOBAL
+          username: "jenkinssvn"
+      - basicSSHUserPrivateKey:
+          description: "Jenkins user with SSH Key for access to Bitbucket Cloud"
+          id: "jenkins.svn-bitbucket-cloud"
+          privateKeySource:
+            directEntry:
+              privateKey: |
+                \$${decodeBase64:${jenkinsBBSSHKey}}
+          scope: GLOBAL
+          username: "jenkins.svn"
+      - string:
+          description: "Bitbucket Cloud DevOps Project Access Token"
+          id: "BBCloudDevOpsProjectAccessToken"
+          scope: GLOBAL
+          secret: "${BBCloudDevopsProjectAccessToken}"      
+      - string:
+          description: "Jira Cloud Secret"
+          id: "Jira-Cloud-Secret"
+          scope: GLOBAL
+          secret: ${jiraCloudSecret}    
+      - string:
+          description: "Integration token for slack notifications"
+          id: "Slack-Integration-Token"
+          scope: GLOBAL
+          secret: ${slackIntegrationToken}
+      - string:
+          description: "Slack Devops channel integration token"
+          id: "slack-integration-token-devops"
+          scope: GLOBAL
+          secret: ${slackIntegrationTokenDevOps}
+      - string:
+          description: "Octopus sandbox server API key"
+          id: "octopusSandboxAPIKey"
+          scope: GLOBAL
+          secret: ${octopusSandboxAPIKey}
+      - string:
+          description: "Octopus Live server API key"
+          id: "octopusLiveAPIKey"
+          scope: GLOBAL
+          secret: ${octopusLiveAPIKey}
+      - usernamePassword:
+          description: "Username and password for Helm chart repository"
+          id: "HelmRepoUser"
+          scope: GLOBAL
+          username: "jenkins"
+          password: ${helmRepoUserPass}
+          usernameSecret: true
+      - string:
+          description: "Sonarqube token for jenkins.svn user"
+          id: "sonarqube-token"
+          scope: GLOBAL
+          secret: ${sonarqubeToken}
+jenkins:
+  updateCenter:
+    sites:
+    - id: "default"
+      url: "https://updates.jenkins.io/update-center.json"
+  primaryView:
+    all:
+      name: "all"
+  viewsTabBar: "standard"
+  views:
+  - all:
+      name: "all"
+  - list:
+      columns:
+      - "status"
+      - "weather"
+      - "jobName"
+      - "lastSuccess"
+      - "lastFailure"
+      - "lastDuration"
+      - "buildButton"
+      - "favoriteColumn"
+      jobNames:
+      - "terraform-jenkins-core"
+      - "terraform-jenkins-platform"
+      - "Simple_Linux_test_job"
+      - "Simple_Windows_test_job"
+      name: "DevOps"
+  projectNamingStrategy:
+    roleBased:
+      forceExistingJobs: true
+  quietPeriod: 5
+  labelAtoms:
+  - name: "linux"
+  - name: "docker"
+  - name: "windows"
+  - name: "osx"
+  globalNodeProperties:
+  - envVars:
+      env:
+      - key: "DockerPullRIM"
+        value: "nexus.retailinmotion.com:5000"
+      - key: "DockerPushRIM"
+        value: "nexus.retailinmotion.com:5100"
+      - key: "FrontendAssetsBucketName"
+        value: "rim-bst-euw1-frontend-assets"
+      - key: "FrontendAssetsBucketRegion"
+        value: "eu-west-1"
+      - key: "HelmRepoRIM"
+        value: "https://nexus.retailinmotion.com/repository/helm-hosted/"
+      - key: "NPMRepoPullRIM"
+        value: "https://nexus.retailinmotion.com/repository/npm-group/"
+      - key: "NPMRepoPushRIM"
+        value: "https://nexus.retailinmotion.com/repository/npm-hosted/"
+      - key: "NuGetPullRIM"
+        value: "https://nexus.retailinmotion.com/repository/nuget-group/"
+      - key: "NuGetPushRIM"
+        value: "https://nexus.retailinmotion.com/repository/nuget-hosted/"
+      - key: "PythonPackageRepo"
+        value: "https://nexus.retailinmotion.com/repository/rim-python/"
+      - key: "ReportPortalUrl"
+        value: "http://reportportal.svc.i-soms.com/api/v1"
+      - key: "SlackNotifierCacheBucket"
+        value: "rim-slack-notifer"
+      - key: "SlackNotifierImage"
+        value: "nexus.retailinmotion.com:5000/slacknotifier:1.0.5-4"
+      - key: "SonarUrl"
+        value: "https://sonarqube.retailinmotion.com/"
+  log:
+    recorders:
+    - loggers:
+      - level: "ALL"
+        name: "hudson.plugins.active_directory"
+      name: "hudson.plugins.active_directory"
+  markupFormatter: "plainText"
+  mode: NORMAL
+  myViewsTabBar: "standard"
+  systemMessage: "RiM serverless Jenkins"
+  numExecutors: 0
+  agentProtocols:
+      - "JNLP4-connect"
+  # securityRealm:
+  #   local:
+  #     allowsSignup: false
+  #     users:
+  #     - id: ecsuser
+  #       password: "passwd"
+  # authorizationStrategy:
+  #   globalMatrix:
+  #     grantedPermissions:
+  #     - "Overall/Read:authenticated"
+  #     - "Job/Read:authenticated"
+  #     - "View/Read:authenticated"
+  #     - "Overall/Administer:authenticated"
+  securityRealm:
+    activeDirectory:
+      customDomain: true
+      cache:
+        size: 1000
+        ttl: 3600
+      domains:
+      - bindName: "guy.gadbois@rim.local"
+        bindPassword: "${ADBindPassword}"
+        name: "rim.local"
+        servers: "rimdub-dc-08.rim.local:389,rimdub-dc-09.rim.local:389"
+        tlsConfiguration: TRUST_ALL_CERTIFICATES
+      groupLookupStrategy: RECURSIVE
+      removeIrrelevantGroups: true
+      requireTLS: false
+      startTls: false
+  authorizationStrategy:
+    roleBased:
+      roles:
+        global:
+        - name: "Jenkins_Lead_Developer"
+          pattern: ".*"
+          permissions:
+          - "Job/Cancel"
+          - "Run/Delete"
+          - "Overall/Read"
+          - "Job/Build"
+          - "SCM/Tag"
+          - "Run/Update"
+          - "Job/Delete"
+          - "Job/Discover"
+          - "Job/Read"
+          - "Job/Workspace"
+          - "View/Read"
+          - "Run/Replay"
+        - name: "Jenkins_Read_Only"
+          pattern: ".*"
+          permissions:
+          - "Overall/Read"
+        - entries:
+          - user: "alexey.suev"
+          - user: "jenkins.svn"
+          - user: "martin.woods"
+          - user: "joseph.sweeney"
+          - user: "stuart.nolan"
+          - user: "stephen.oreilly"
+          - user: "christian.magalhaes"
+          - user: "peter.heffernan"
+          - user: "steven.loughlin"
+          name: "admin"
+          pattern: ".*"
+          permissions:
+          - "Overall/Administer"
+        items:
+        - name: "Jenkins_CSA"
+          pattern: ".*"
+          permissions:
+          - "Job/Cancel"
+          - "Job/Build"
+          - "Job/Discover"
+          - "Job/Read"
+          - "Job/Workspace"
+          - "Credentials/View"
+        - name: "Jenkins_Dashboards"
+          pattern: ".*"
+          permissions:
+          - "Job/Read"
+        - name: "Jenkins_Developer"
+          pattern: " .*"
+          permissions:
+          - "Job/Cancel"
+          - "Job/Build"
+          - "Job/Discover"
+          - "Job/Read"
+          - "Job/Workspace"
+          - "Credentials/View"
+        - name: "Jenkins_QA_Automation"
+          pattern: ".*"
+          permissions:
+          - "Job/Cancel"
+          - "Job/Build"
+          - "Job/Discover"
+          - "Job/Read"
+          - "Job/Workspace"
+          - "Credentials/View"
+        - name: "Jenkins_VectorBO_Team"
+          pattern: ".*"
+          permissions:
+          - "Job/Cancel"
+          - "Job/Build"
+          - "Job/Discover"
+          - "Job/Read"
+          - "Job/Workspace"
+          - "Credentials/View"
+        - name: "Jenkins_vPay_Team"
+          pattern: ".*"
+          permissions:
+          - "Job/Cancel"
+          - "Job/Build"
+          - "Job/Discover"
+          - "Job/Read"
+          - "Job/Workspace"
+          - "Credentials/View"
+        - name: "Jenkins_vPos_Team"
+          pattern: ".*"
+          permissions:
+          - "Job/Cancel"
+          - "Job/Build"
+          - "Job/Discover"
+          - "Job/Read"
+          - "Job/Workspace"
+          - "Credentials/View"
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: true
+  slaveAgentPort: 50000
+  clouds:
+      - ecs:
+            numExecutors: 1
+            allowedOverrides: "inheritFrom,label,memory,cpu,image"
+            credentialsId: ""
+            cluster: ${ecs_cluster_fargate_spot}
+            name: "fargate-cloud-spot"
+            regionName: ${cluster_region}
+            retentionTimeout: 10
+            jenkinsUrl: "http://${jenkins_cloud_map_name}:${jenkins_controller_port}"
+            templates:
+                - cpu: "512"
+                  image: "560892083344.dkr.ecr.eu-west-1.amazonaws.com/jenkins-dev-linux-agents:linux-lts"
+                  label: "linux docker"
+                  executionRole: ${execution_role_arn}
+                  launchType: "FARGATE"
+                  memory: 0
+                  memoryReservation: 1024
+                  networkMode: "awsvpc"
+                  operatingSystemFamily: "LINUX"
+                  privileged: false
+                  remoteFSRoot: "/home/jenkins"
+                  securityGroups: ${agent_security_groups}
+                  sharedMemorySize: 0
+                  subnets: ${subnets}
+                  templateName: "build-linux"
+                  uniqueRemoteFSRoot: false
+                  environments:
+                  - name: "DOCKER_HOST"
+                    value: "tcp://${dockerRunLinuxHostPrivateIP}:2375"
+                - cpu: 2048
+                  image: "560892083344.dkr.ecr.eu-west-1.amazonaws.com/jenkins-dev-windows-agents:jdk17-wincore-2019"
+                  label: "windows"
+                  executionRole: ${execution_role_arn}
+                  launchType: "FARGATE"
+                  memoryReservation: 4096
+                  networkMode: "awsvpc"
+                  operatingSystemFamily: "WINDOWS_SERVER_2019_CORE"
+                  privileged: false
+                  securityGroups: ${agent_security_groups}
+                  sharedMemorySize: 0
+                  subnets: ${subnets}
+                  templateName: "build-windows"
+                  uniqueRemoteFSRoot: false
+                  defaultCapacityProvider: false
+                  assignPublicIp: false
+                  cpuArchitecture: "X86_64"
+                  environments:
+                  - name: "DOCKER_HOST"
+                    value: "tcp://${dockerRunWindowsHostPrivateIP}:2375"
+security:
+  gitHostKeyVerificationConfiguration:
+    sshHostKeyVerificationStrategy: "knownHostsFileVerificationStrategy"
+  apiToken:
+    usageStatisticsEnabled: false
+unclassified:
+  bitbucketEndpointConfiguration:
+    endpoints:
+    - bitbucketCloudEndpoint:
+        enableCache: false
+        manageHooks: false
+        repositoriesCacheDuration: 0
+        teamCacheDuration: 0
+  location:
+    adminAddress: "devops@retailinmotion.com"
+    url: "https://${jenkinsDNSName}.retailinmotion.com/"
+  globalDefaultFlowDurabilityLevel:
+    durabilityHint: PERFORMANCE_OPTIMIZED
+  defaultFolderConfiguration:
+    healthMetrics:
+    - worstChildHealthMetric:
+        recursive: true
+  globalLibraries:
+    libraries:
+    - defaultVersion: "master"
+      includeInChangesets: false
+      name: "vectorShared"
+      retriever:
+        modernSCM:
+          libraryPath: "./"
+          scm:
+            git:
+              credentialsId: "O365-Jenkins-SVN-App-pass"
+              remote: "https://jenkinssvn@bitbucket.org/retailinmotion/jenkinssharedlibraries.git"
+              traits:
+              - "gitBranchDiscovery"
+              - userIdentity:
+                  extension:
+                    email: "devops@retailinmotion.com"
+                    name: "jenkins"
+    - defaultVersion: "master"
+      includeInChangesets: false
+      name: "microservicesBuild"
+      retriever:
+        modernSCM:
+          libraryPath: "./"
+          scm:
+            git:
+              credentialsId: "O365-Jenkins-SVN-App-pass"
+              remote: "https://jenkinssvn@bitbucket.org/retailinmotion/build.git"
+              traits:
+              - "gitBranchDiscovery"
+              - userIdentity:
+                  extension:
+                    email: "devops@retailinmotion.com"
+                    name: "jenkins"
+    - defaultVersion: "feature/DEVOPS-1714"
+      includeInChangesets: false
+      name: "vectorSharedNew"
+      retriever:
+        modernSCM:
+          libraryPath: "./"
+          scm:
+            git:
+              credentialsId: "O365-Jenkins-SVN-App-pass"
+              id: "ab22eb71-d034-4c6e-8901-fb0bdf5abc38"
+              remote: "https://jenkinssvn@bitbucket.org/retailinmotion/jenkinssharedlibraries.git"
+              traits:
+              - "gitBranchDiscovery"
+              - userIdentity:
+                  extension:
+                    email: "alexey.suev@retailinmotion.com"
+                    name: "jenkins_dev"
+  globalTimeOutConfiguration:
+    operations:
+    - "abortOperation"
+    overwriteable: false
+  injectionConfig:
+    allowUntrusted: false
+    checkForBuildAgentErrors: false
+    enabled: false
+    enforceUrl: false
+    ####injectMavenExtension: false
+  jobConfigHistory:
+    excludePattern: 'queue\\.xml|nodeMonitors\\.xml|UpdateCenter\\.xml|global-build-stats|LockableResourcesManager\\\
+      .xml|MilestoneStep\\.xml'
+    saveModuleConfiguration: false
+    showBuildBadges: "always"
+    showChangeReasonCommentWindow: true
+    skipDuplicateHistory: true
+  enrichedSummaryConfig:
+    enrichedSummaryEnabled: false
+    httpClientDelayBetweenRetriesInSeconds: 1
+    httpClientMaxRetries: 3
+    httpClientTimeoutInSeconds: 1
+  mailer:
+    charset: "UTF-8"
+    smtpHost: "smtp.office365.com"
+    useSsl: false
+    useTls: false
+  mavenModuleSet:
+    localRepository: "default"
+  pollSCM:
+    pollingThreadCount: 10
+  scmGit:
+    addGitTagAction: false
+    allowSecondFetch: false
+    createAccountBasedOnEmail: false
+    disableGitToolChooser: true
+    globalConfigEmail: "release@retailinmotion.com"
+    globalConfigName: "jenkins build"
+    hideCredentials: false
+    showEntireCommitSummaryInChanges: false
+    useExistingAccountWithSameEmail: false
+  slackNotifier:
+    baseUrl: "https://retailinmotion.slack.com/services/hooks/jenkins-ci/"
+    botUser: false
+    sendAsText: false
+    teamDomain: "retailinmotion"
+    tokenCredentialId: "slack-integration-token"
+  timestamper:
+    allPipelines: true
+    elapsedTimeFormat: "'<b>'HH:mm:ss.S'</b> '"
+    systemTimeFormat: "'<b>'HH:mm:ss'</b> '"
+  sonarGlobalConfiguration:
+    buildWrapperEnabled: true
+    installations:
+    - credentialsId: "sonarqube-token"
+      name: "SonarQubeServer"
+      serverUrl: "https://sonarqube.retailinmotion.com"
+      triggers:
+        skipScmCause: false
+        skipUpstreamCause: false
+jobs:
+  - file: ${jenkinsHome}/dsl_seed_jobs/DevOps/terraform-jenkins-core.groovy
+  - file: ${jenkinsHome}/dsl_seed_jobs/DevOps/terraform-jenkins-platform.groovy
+  - script: >
+      pipelineJob('Simple_Linux_test_job') {
+        definition {
+          cps {
+            script('''
+              pipeline {
+                  agent {
+                      ecs {
+                          inheritFrom 'linux'
+                      }
+                  }
+                  stages {
+                    stage('Get Public IP') {
+                        steps {
+                          echo 'This was executed on a spot instance as a docker container'
+                          sh 'curl api.ipify.org'
+                          sh 'git version'
+                          sh 'docker version'
+                        }
+                    }
+                  }
+              }'''.stripIndent())
+              sandbox()
+          }
+        }
+      }
+  - script: >
+      pipelineJob('Simple_Windows_test_job') {
+        definition {
+          cps {
+            script('''
+              pipeline {
+                  agent {
+                      ecs {
+                          inheritFrom 'windows'
+                      }
+                  }
+                  stages {
+                    stage('Get Public IP') {
+                        steps {
+                          powershell """
+                            Write-Output 'Hello from PowerShell'
+                            # Add your PowerShell commands here
+                            docker version
+                            docker info
+                            docker run hello-world                            
+                          """
+                        }
+                    }
+                  }
+              }'''.stripIndent())
+              sandbox()
+          }
+        }
+      }
+
